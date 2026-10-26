@@ -276,6 +276,34 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .status-line.is-error { color: var(--accent); }
 
+.translating-word {
+  animation: translating-fade 1.6s ease-in-out infinite;
+}
+
+.translating-dots {
+  display: inline-block;
+  width: 1.1em;
+  text-align: left;
+}
+
+.translating-dots span {
+  opacity: 0.2;
+  animation: translating-dot 1.2s ease-in-out infinite;
+}
+
+.translating-dots span:nth-child(2) { animation-delay: 0.15s; }
+.translating-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes translating-fade {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@keyframes translating-dot {
+  0%, 70%, 100% { opacity: 0.2; }
+  35% { opacity: 1; }
+}
+
 .inline-retry {
   margin-left: 0.7rem;
   border: 0;

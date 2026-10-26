@@ -59,8 +59,30 @@ export function Manuscript({
   const activeIndex = segments.findIndex((segment) => segment.status === "translating");
   const ratio = segments.length === 0 ? 0 : done / segments.length;
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const downloadRef = useRef<HTMLDivElement>(null);
+  const copiedTimer = useRef<number | null>(null);
   const downloadDisabled = !ready || Boolean(exporting) || retrying;
+  const translationText = segments
+    .map((segment) => segment.translation.trim())
+    .filter(Boolean)
+    .join("\n\n");
+
+  useEffect(() => () => {
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+  }, []);
+
+  async function copyTranslation() {
+    if (!translationText) return;
+    try {
+      await navigator.clipboard.writeText(translationText);
+    } catch {
+      return;
+    }
+    setCopied(true);
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 1600);
+  }
 
   useEffect(() => {
     if (!downloadOpen) return;
@@ -103,6 +125,14 @@ export function Manuscript({
                   {retrying ? "Retrying" : "Retry"}
                 </button>
               )}
+              <button
+                type="button"
+                className="text-btn"
+                disabled={!translationText}
+                onClick={() => void copyTranslation()}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
               <div className="download" ref={downloadRef}>
                 <button
                   type="button"
@@ -188,8 +218,21 @@ export function Manuscript({
                   )}
                 </div>
               ) : (
-                <p className={segment.status === "error" ? "status-line is-error" : "status-line"}>
-                  {segment.status === "error" ? segment.error || "This segment did not translate." : segment.status === "translating" ? "Translating" : "Waiting"}
+                <p className={segment.status === "error" ? "status-line is-error" : segment.status === "translating" ? "status-line is-translating" : "status-line"}>
+                  {segment.status === "error" ? (
+                    segment.error || "This segment did not translate."
+                  ) : segment.status === "translating" ? (
+                    <>
+                      <span className="translating-word">Translating</span>
+                      <span className="translating-dots" aria-hidden="true">
+                        <span>.</span>
+                        <span>.</span>
+                        <span>.</span>
+                      </span>
+                    </>
+                  ) : (
+                    "Waiting"
+                  )}
                   {segment.status === "error" && (
                     <button type="button" className="inline-retry" onClick={() => onRetry(index)}>Retry</button>
                   )}
