@@ -82,10 +82,10 @@ button { -webkit-tap-highlight-color: transparent; }
   gap: 0.6rem;
   margin: 0;
   font-family: var(--serif);
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
-  font-size: 1.55rem;
-  letter-spacing: -0.03em;
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
   line-height: 1;
 }
 
@@ -93,6 +93,13 @@ button { -webkit-tap-highlight-color: transparent; }
   width: 1.85rem;
   height: auto;
   display: block;
+  flex: none;
+}
+
+.wordmark span {
+  display: block;
+  line-height: 1;
+  transform: translateY(0.06em);
 }
 
 .bar-flow {

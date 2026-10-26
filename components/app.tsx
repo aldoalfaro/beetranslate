@@ -49,8 +49,8 @@ async function requestSegment(input: {
 
 export function App() {
   const [phase, setPhase] = useState<Phase>("compose");
-  const [from, setFrom] = useState<LanguageId>("es");
-  const [to, setTo] = useState<LanguageId>("en");
+  const [from, setFrom] = useState<LanguageId>("ko");
+  const [to, setTo] = useState<LanguageId>("es");
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
