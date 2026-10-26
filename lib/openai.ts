@@ -10,11 +10,23 @@ const EMPTY_NOTE =
 
 let client: OpenAI | null = null;
 
+// The Node build of the SDK sends requests through node-fetch and a keep-alive
+// agent. Cloudflare Workers cannot open those sockets, so the call fails with
+// "Connection error." Use the runtime fetch and drop the agent.
+function openAIFetch(url: RequestInfo, init?: RequestInit): Promise<Response> {
+  const request = init as (RequestInit & { agent?: unknown }) | undefined;
+  if (request && "agent" in request) {
+    const { agent: _agent, ...rest } = request;
+    return fetch(url, rest);
+  }
+  return fetch(url, request);
+}
+
 function getClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set.");
   if (!client) {
-    client = new OpenAI({ apiKey, timeout: 90_000, maxRetries: 2 });
+    client = new OpenAI({ apiKey, timeout: 90_000, maxRetries: 2, fetch: openAIFetch });
   }
   return client;
 }
