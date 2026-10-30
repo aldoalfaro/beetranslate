@@ -3,6 +3,7 @@ import "server-only";
 import { existsSync } from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
+import { t, type UiLocale } from "@/lib/i18n";
 import { languageName } from "@/lib/languages";
 import { isHangul } from "@/lib/script";
 import type { ExportRequest } from "@/lib/types";
@@ -235,7 +236,7 @@ function stampFooters(doc: PdfDoc) {
   }
 }
 
-export function renderPdf(request: ExportRequest): Promise<Buffer> {
+export function renderPdf(request: ExportRequest, locale: UiLocale = "en"): Promise<Buffer> {
   const doc = new PDFDocument({
     size: "A4",
     margins: { top: TOP, bottom: 40, left: MARGIN_X, right: MARGIN_X },
@@ -259,7 +260,7 @@ export function renderPdf(request: ExportRequest): Promise<Buffer> {
 
   let y = TOP;
   y = drawBlock(doc, request.title, y, { size: 18, color: "#1c1915", bold: true, gap: 8 });
-  y = drawBlock(doc, `${languageName(request.from)} – ${languageName(request.to)}`, y, {
+  y = drawBlock(doc, `${languageName(request.from, locale)} – ${languageName(request.to, locale)}`, y, {
     size: 11,
     color: "#5c564c",
     gap: 8,
@@ -278,7 +279,7 @@ export function renderPdf(request: ExportRequest): Promise<Buffer> {
   if (notes.length > 0) {
     y += 8;
     y = drawRule(doc, y);
-    y = drawBlock(doc, "Notes", y, { size: 13, color: "#1c1915", bold: true, gap: 10 });
+    y = drawBlock(doc, t(locale, "notes"), y, { size: 13, color: "#1c1915", bold: true, gap: 10 });
     for (const note of notes) {
       y = drawBlock(doc, `${note.number}  ${note.note}`, y, { size: 10.5, color: "#1c1915", gap: 8 });
     }

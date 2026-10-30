@@ -1,5 +1,7 @@
 import type { LanguageId } from "@/lib/languages";
 
+export const MAX_INSTRUCTIONS = 2_000;
+
 export type SegmentStatus = "waiting" | "translating" | "done" | "error";
 
 export type Segment = {

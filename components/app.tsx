@@ -4,20 +4,35 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Compose } from "@/components/compose";
 import { Manuscript } from "@/components/manuscript";
 import { downloadName } from "@/lib/download-name";
+import { isFatalTranslationError, t, type UiLocale } from "@/lib/i18n";
 import { languageName, type LanguageId } from "@/lib/languages";
 import { MAX_INPUT_CHARS, MAX_SEGMENTS, segmentText } from "@/lib/segment";
-import type { Segment } from "@/lib/types";
+import { MAX_INSTRUCTIONS, type Segment } from "@/lib/types";
 
 type Phase = "compose" | "translating" | "done";
 
-function isFatal(message: string): boolean {
-  return /API key|OPENAI_API_KEY|rate limit|model is unavailable|not set/i.test(message);
+class SegmentError extends Error {
+  fatal: boolean;
+
+  constructor(message: string, fatal = false) {
+    super(message);
+    this.name = "SegmentError";
+    this.fatal = fatal;
+  }
+}
+
+function isFatal(error: unknown): boolean {
+  if (error instanceof SegmentError && error.fatal) return true;
+  const message = error instanceof Error ? error.message : "";
+  return isFatalTranslationError(message);
 }
 
 async function requestSegment(input: {
+  locale: UiLocale;
   from: LanguageId;
   to: LanguageId;
   current: string;
+  instructions: string;
   previousOriginal: string;
   previousTranslation: string;
   signal?: AbortSignal;
@@ -29,17 +44,18 @@ async function requestSegment(input: {
       from: input.from,
       to: input.to,
       current: input.current,
+      instructions: input.instructions,
       previousOriginal: input.previousOriginal,
       previousTranslation: input.previousTranslation,
     }),
     signal: input.signal,
   });
-  const payload = (await response.json().catch(() => ({}))) as { error?: string; translation?: string; note?: string };
+  const payload = (await response.json().catch(() => ({}))) as { error?: string; translation?: string; note?: string; fatal?: boolean };
   if (!response.ok) {
-    throw new Error(payload.error || "This segment did not translate.");
+    throw new SegmentError(payload.error || t(input.locale, "segmentFailed"), Boolean(payload.fatal));
   }
   if (typeof payload.translation !== "string" || !payload.translation.trim()) {
-    throw new Error("This segment came back empty.");
+    throw new SegmentError(t(input.locale, "segmentEmpty"));
   }
   return {
     translation: payload.translation.trim(),
@@ -47,11 +63,12 @@ async function requestSegment(input: {
   };
 }
 
-export function App() {
+export function App({ locale }: { locale: UiLocale }) {
   const [phase, setPhase] = useState<Phase>("compose");
   const [from, setFrom] = useState<LanguageId>("ko");
   const [to, setTo] = useState<LanguageId>("es");
   const [text, setText] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,11 +97,11 @@ export function App() {
   useEffect(() => {
     if (phase === "translating") {
       const done = segments.filter((segment) => segment.status === "done" || segment.status === "error").length;
-      document.title = `${done} of ${segments.length} · Bee Translate`;
+      document.title = `${done} ${t(locale, "of")} ${segments.length} · Bee Translate`;
       return;
     }
-    document.title = phase === "done" ? `${languageName(from)} → ${languageName(to)} · Bee Translate` : "Bee Translate";
-  }, [phase, segments, from, to]);
+    document.title = phase === "done" ? `${languageName(from, locale)} → ${languageName(to, locale)} · Bee Translate` : "Bee Translate";
+  }, [phase, segments, from, to, locale]);
 
   useEffect(() => {
     if (!armNew) return;
@@ -131,12 +148,12 @@ export function App() {
       const response = await fetch("/api/extract", { method: "POST", body });
       const payload = (await response.json().catch(() => ({}))) as { error?: string; text?: string };
       if (!response.ok || typeof payload.text !== "string") {
-        throw new Error(payload.error || "The file could not be read.");
+        throw new Error(payload.error || t(locale, "fileUnreadable"));
       }
       setText(payload.text);
     } catch (caught) {
       setFileName(null);
-      setError(caught instanceof Error ? caught.message : "The file could not be read.");
+      setError(caught instanceof Error ? caught.message : t(locale, "fileUnreadable"));
     } finally {
       setReading(false);
     }
@@ -181,9 +198,11 @@ export function App() {
         const previous = index > 0 ? segmentsRef.current[index - 1] : undefined;
         try {
           const result = await requestSegment({
+            locale,
             from,
             to,
             current: parts[index],
+            instructions: instructions.trim().slice(0, MAX_INSTRUCTIONS),
             previousOriginal: previous?.original ?? "",
             previousTranslation: previous?.status === "done" ? previous.translation : "",
             signal: controller.signal,
@@ -193,8 +212,8 @@ export function App() {
           patch(index, { translation: result.translation, note: result.note, status: "done", error: undefined });
         } catch (caught) {
           if (controller.signal.aborted) return;
-          const message = caught instanceof Error ? caught.message : "This segment did not translate.";
-          const fatal = isFatal(message);
+          const message = caught instanceof Error ? caught.message : t(locale, "segmentFailed");
+          const fatal = isFatal(caught);
           if (fatal && succeeded === 0) {
             commit([]);
             setPhase("compose");
@@ -228,9 +247,11 @@ export function App() {
     patch(index, { status: "translating", error: undefined });
     try {
       const result = await requestSegment({
+        locale,
         from,
         to,
         current: current.original,
+        instructions: instructions.trim().slice(0, MAX_INSTRUCTIONS),
         previousOriginal: previous?.original ?? "",
         previousTranslation: previous?.translation ?? "",
       });
@@ -238,7 +259,7 @@ export function App() {
     } catch (caught) {
       patch(index, {
         status: "error",
-        error: caught instanceof Error ? caught.message : "This segment did not translate.",
+        error: caught instanceof Error ? caught.message : t(locale, "segmentFailed"),
       });
     } finally {
       inflightRef.current.delete(index);
@@ -262,7 +283,7 @@ export function App() {
     if (!ready || exporting) return;
     setExporting(kind);
     setError(null);
-    const title = (fileName ? fileName.replace(/\.[^.]+$/, "") : "Translation").slice(0, 120);
+    const title = (fileName ? fileName.replace(/\.[^.]+$/, "") : t(locale, "translationTitle")).slice(0, 120);
     try {
       const response = await fetch(kind === "pdf" ? "/api/export/pdf" : "/api/export/docx", {
         method: "POST",
@@ -279,7 +300,7 @@ export function App() {
       });
       if (!response.ok) {
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error || "The file could not be prepared.");
+        throw new Error(payload.error || t(locale, "fileUnprepared"));
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -291,7 +312,7 @@ export function App() {
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The file could not be prepared.");
+      setError(caught instanceof Error ? caught.message : t(locale, "fileUnprepared"));
     } finally {
       setExporting(null);
     }
@@ -324,6 +345,7 @@ export function App() {
     <main className="page">
       {phase === "compose" ? (
         <Compose
+          locale={locale}
           from={from}
           to={to}
           text={text}
@@ -333,6 +355,8 @@ export function App() {
           segmentCount={preview.length}
           onFrom={setFrom}
           onTo={setTo}
+          instructions={instructions}
+          onInstructions={setInstructions}
           onText={setText}
           onFile={(file) => void takeFile(file)}
           onClearFile={() => {
@@ -343,6 +367,7 @@ export function App() {
         />
       ) : (
         <Manuscript
+          locale={locale}
           from={from}
           to={to}
           segments={segments}

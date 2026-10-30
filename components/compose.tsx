@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg className={open ? "chevron is-open" : "chevron"} viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M4.2 2.3 8 6 4.2 9.7" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 function FileIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,13 +20,17 @@ function FileIcon() {
 }
 import { Brand } from "@/components/brand";
 import { FittedTextarea } from "@/components/fitted-textarea";
-import { LANGUAGES, type LanguageId } from "@/lib/languages";
-import { MAX_INPUT_CHARS, MAX_SEGMENTS, segmentCountLabel } from "@/lib/segment";
+import { segmentCount as segmentCountLabel, t, type UiLocale } from "@/lib/i18n";
+import { LANGUAGES, languageName, type LanguageId } from "@/lib/languages";
+import { MAX_INPUT_CHARS, MAX_SEGMENTS } from "@/lib/segment";
+import { MAX_INSTRUCTIONS } from "@/lib/types";
 
 type Props = {
+  locale: UiLocale;
   from: LanguageId;
   to: LanguageId;
   text: string;
+  instructions: string;
   fileName: string | null;
   reading: boolean;
   error: string | null;
@@ -26,15 +38,18 @@ type Props = {
   onFrom: (value: LanguageId) => void;
   onTo: (value: LanguageId) => void;
   onText: (value: string) => void;
+  onInstructions: (value: string) => void;
   onFile: (file: File) => void;
   onClearFile: () => void;
   onTranslate: () => void;
 };
 
 export function Compose({
+  locale,
   from,
   to,
   text,
+  instructions,
   fileName,
   reading,
   error,
@@ -42,13 +57,16 @@ export function Compose({
   onFrom,
   onTo,
   onText,
+  onInstructions,
   onFile,
   onClearFile,
   onTranslate,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const instructionsRef = useRef<HTMLTextAreaElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const tooLong = text.length > MAX_INPUT_CHARS;
   const tooMany = segmentCount > MAX_SEGMENTS;
   const sameLanguage = from === to;
@@ -58,14 +76,18 @@ export function Compose({
     if (window.matchMedia("(pointer: fine)").matches) textRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (instructionsOpen) instructionsRef.current?.focus();
+  }, [instructionsOpen]);
+
   const hint = sameLanguage
-    ? "Choose two different languages."
+    ? t(locale, "differentLanguages")
     : tooLong
-      ? "This text is too long to translate in one pass."
+      ? t(locale, "tooLong")
       : tooMany
-        ? `${segmentCountLabel(segmentCount)}. ${MAX_SEGMENTS} is the maximum. Shorten the text and try again.`
+        ? `${segmentCountLabel(locale, segmentCount)}. ${MAX_SEGMENTS} ${t(locale, "maximum")} ${t(locale, "shorten")}`
         : text.trim()
-          ? segmentCountLabel(segmentCount)
+          ? segmentCountLabel(locale, segmentCount)
           : "";
 
   return (
@@ -104,7 +126,7 @@ export function Compose({
 
         <div className="lang-row">
           <div>
-            <label className="lang-kicker" htmlFor="source-language">From</label>
+            <label className="lang-kicker" htmlFor="source-language">{t(locale, "from")}</label>
             <select
               id="source-language"
               className="lang-select"
@@ -112,13 +134,13 @@ export function Compose({
               onChange={(event) => onFrom(event.target.value as LanguageId)}
             >
               {LANGUAGES.map((language) => (
-                <option key={language.id} value={language.id}>{language.name}</option>
+                <option key={language.id} value={language.id}>{languageName(language.id, locale)}</option>
               ))}
             </select>
           </div>
           <p className="lang-arrow" aria-hidden="true">→</p>
           <div>
-            <label className="lang-kicker" htmlFor="target-language">To</label>
+            <label className="lang-kicker" htmlFor="target-language">{t(locale, "to")}</label>
             <select
               id="target-language"
               className="lang-select"
@@ -126,35 +148,35 @@ export function Compose({
               onChange={(event) => onTo(event.target.value as LanguageId)}
             >
               {LANGUAGES.map((language) => (
-                <option key={language.id} value={language.id}>{language.name}</option>
+                <option key={language.id} value={language.id}>{languageName(language.id, locale)}</option>
               ))}
             </select>
           </div>
         </div>
 
         <div className="source-block">
-          {dragging && <p className="drop-hint">Drop the file</p>}
+          {dragging && <p className="drop-hint">{t(locale, "dropFile")}</p>}
           {fileName ? (
             <div className="file-sheet">
               <FileIcon />
               <div className="file-sheet-copy">
                 <p className="file-sheet-name">{fileName}</p>
                 <p className={tooLong || tooMany ? "file-sheet-meta is-over" : "file-sheet-meta"}>
-                  {reading ? "Reading" : hint}
+                  {reading ? t(locale, "reading") : hint}
                 </p>
               </div>
-              <button type="button" className="text-btn" onClick={onClearFile}>Remove</button>
+              <button type="button" className="text-btn" onClick={onClearFile}>{t(locale, "remove")}</button>
             </div>
           ) : (
             <>
-              <label className="sr-only" htmlFor="source-text">Source text</label>
+              <label className="sr-only" htmlFor="source-text">{t(locale, "sourceText")}</label>
               <FittedTextarea
                 ref={textRef}
                 id="source-text"
                 className="source-input"
                 minHeight={280}
                 value={text}
-                placeholder="Paste text, or drop a PDF or Word file."
+                placeholder={t(locale, "sourcePlaceholder")}
                 onChange={(event) => onText(event.target.value)}
               />
             </>
@@ -166,12 +188,38 @@ export function Compose({
           <p className={tooLong || tooMany || sameLanguage ? "count is-over field-count" : "count field-count"}>{hint}</p>
         )}
 
+        <div className="instructions">
+          <button
+            type="button"
+            className={instructions.trim() ? "text-btn instructions-toggle is-set" : "text-btn instructions-toggle"}
+            aria-expanded={instructionsOpen}
+            aria-controls="instructions"
+            onClick={() => setInstructionsOpen((open) => !open)}
+          >
+            <Chevron open={instructionsOpen} />
+            {t(locale, "customInstructions")}
+          </button>
+          {instructionsOpen && (
+            <textarea
+              ref={instructionsRef}
+              id="instructions"
+              className="instructions-input"
+              aria-label={t(locale, "customInstructions")}
+              value={instructions}
+              maxLength={MAX_INSTRUCTIONS}
+              rows={3}
+              placeholder={t(locale, "instructionsPlaceholder")}
+              onChange={(event) => onInstructions(event.target.value)}
+            />
+          )}
+        </div>
+
         <div className="action-row">
           <button type="button" className="text-btn" onClick={() => fileRef.current?.click()}>
-            Upload
+            {t(locale, "upload")}
           </button>
           <button type="button" className="translate" disabled={!canTranslate} onClick={onTranslate}>
-            Translate
+            {t(locale, "translate")}
             <span className="arrow" aria-hidden="true">→</span>
           </button>
         </div>

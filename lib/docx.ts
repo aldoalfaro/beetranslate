@@ -8,6 +8,7 @@ import {
   Paragraph,
   TextRun,
 } from "docx";
+import { t, type UiLocale } from "@/lib/i18n";
 import { languageName } from "@/lib/languages";
 import { isHangul } from "@/lib/script";
 import type { ExportRequest } from "@/lib/types";
@@ -46,9 +47,9 @@ function textParagraphs(text: string, size: number, afterLast: number, bold = fa
   });
 }
 
-export async function renderDocx(request: ExportRequest): Promise<Buffer> {
-  const fromName = languageName(request.from);
-  const toName = languageName(request.to);
+export async function renderDocx(request: ExportRequest, locale: UiLocale = "en"): Promise<Buffer> {
+  const fromName = languageName(request.from, locale);
+  const toName = languageName(request.to, locale);
   const children: Paragraph[] = [
     ...textParagraphs(request.title, 36, 80, true),
     new Paragraph({
@@ -80,7 +81,7 @@ export async function renderDocx(request: ExportRequest): Promise<Buffer> {
         border: {
           top: { style: BorderStyle.SINGLE, size: 6, color: "D9D3C7", space: 16 },
         },
-        children: [new TextRun({ text: "Notes", bold: true, size: 26, font: "Times New Roman" })],
+        children: [new TextRun({ text: t(locale, "notes"), bold: true, size: 26, font: "Times New Roman" })],
       }),
     );
     for (const note of notes) {

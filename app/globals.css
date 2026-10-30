@@ -522,6 +522,51 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .field-count { margin: 0.75rem 0 0; }
 
+.instructions { margin-top: 1.15rem; }
+
+.instructions-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.instructions-toggle .chevron {
+  width: 0.62rem;
+  height: 0.62rem;
+  flex: none;
+  transition: transform 0.18s ease;
+}
+
+.instructions-toggle .chevron.is-open { transform: rotate(90deg); }
+
+.text-btn.is-set { color: var(--accent); }
+
+.instructions-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.7rem;
+  border: 1px solid var(--rule);
+  background: transparent;
+  resize: vertical;
+  padding: 0.85rem 1rem;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--ink);
+  caret-color: var(--accent);
+}
+
+.instructions-input::placeholder {
+  color: var(--faint);
+  font-style: italic;
+}
+
+.instructions-input:focus,
+.instructions-input:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+}
+
 .action-row {
   display: flex;
   justify-content: space-between;
@@ -622,13 +667,15 @@ button { -webkit-tap-highlight-color: transparent; }
 .compose .bar,
 .compose .lang-row,
 .compose .source-block,
+.compose .instructions,
 .compose .action-row {
   animation: rise 0.6s ease both;
 }
 
 .compose .lang-row { animation-delay: 0.05s; }
 .compose .source-block { animation-delay: 0.1s; }
-.compose .action-row { animation-delay: 0.16s; }
+.compose .instructions { animation-delay: 0.14s; }
+.compose .action-row { animation-delay: 0.18s; }
 
 .manuscript { animation: fade 0.4s ease both; }
 .note { animation: rise 0.18s ease both; }

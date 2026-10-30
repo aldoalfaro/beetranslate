@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Brand } from "@/components/brand";
 import { FittedTextarea } from "@/components/fitted-textarea";
+import { noteOnSegment, t, translationField, type UiLocale } from "@/lib/i18n";
 import { languageName, type LanguageId } from "@/lib/languages";
 import type { Segment } from "@/lib/types";
 
 type Props = {
+  locale: UiLocale;
   from: LanguageId;
   to: LanguageId;
   segments: Segment[];
@@ -35,6 +37,7 @@ function InfoIcon() {
 }
 
 export function Manuscript({
+  locale,
   from,
   to,
   segments,
@@ -51,8 +54,8 @@ export function Manuscript({
   onDownload,
   onNew,
 }: Props) {
-  const fromName = languageName(from);
-  const toName = languageName(to);
+  const fromName = languageName(from, locale);
+  const toName = languageName(to, locale);
   const done = segments.filter((segment) => segment.status === "done" || segment.status === "error").length;
   const failed = segments.filter((segment) => segment.status === "error").length;
   const ready = segments.length > 0 && segments.every((segment) => segment.status === "done");
@@ -122,7 +125,7 @@ export function Manuscript({
               )}
               {failed > 0 && !translating && (
                 <button type="button" className="text-btn" onClick={onRetryFailed} disabled={retrying}>
-                  {retrying ? "Retrying" : "Retry"}
+                  {retrying ? t(locale, "retrying") : t(locale, "retry")}
                 </button>
               )}
               <button
@@ -131,7 +134,7 @@ export function Manuscript({
                 disabled={!translationText}
                 onClick={() => void copyTranslation()}
               >
-                {copied ? "Copied" : "Copy"}
+                {copied ? t(locale, "copied") : t(locale, "copy")}
               </button>
               <div className="download" ref={downloadRef}>
                 <button
@@ -142,7 +145,7 @@ export function Manuscript({
                   disabled={downloadDisabled}
                   onClick={() => setDownloadOpen((open) => !open)}
                 >
-                  {exporting ? "Preparing" : "Download"}
+                  {exporting ? t(locale, "preparing") : t(locale, "download")}
                 </button>
                 {downloadOpen && !downloadDisabled && (
                   <div className="download-menu" role="menu">
@@ -156,7 +159,7 @@ export function Manuscript({
                 )}
               </div>
               <button type="button" className={armNew ? "text-btn is-danger" : "text-btn"} onClick={onNew}>
-                {armNew ? "Discard" : "New"}
+                {armNew ? t(locale, "discard") : t(locale, "new")}
               </button>
             </div>
           </header>
@@ -189,7 +192,7 @@ export function Manuscript({
               <span className="cell-label">{toName}</span>
               {segment.status === "done" ? (
                 <div className="target-body">
-                  <label className="sr-only" htmlFor={segment.id}>Translation {index + 1}</label>
+                  <label className="sr-only" htmlFor={segment.id}>{translationField(locale, index + 1)}</label>
                   <FittedTextarea
                     id={segment.id}
                     className="translation"
@@ -202,15 +205,15 @@ export function Manuscript({
                       <button
                         type="button"
                         className="info"
-                        aria-label={`Note on segment ${index + 1}`}
+                        aria-label={noteOnSegment(locale, index + 1)}
                         aria-expanded={openNote === segment.id}
                         onClick={() => onToggleNote(segment.id)}
                       >
                         <InfoIcon />
                       </button>
                       {openNote === segment.id && (
-                        <div className="note" role="dialog" aria-label="Translation note" lang={to}>
-                          <p className="note-kicker">Note</p>
+                        <div className="note" role="dialog" aria-label={t(locale, "translationNote")} lang={to}>
+                          <p className="note-kicker">{t(locale, "note")}</p>
                           <p className="note-body">{segment.note}</p>
                         </div>
                       )}
@@ -220,10 +223,10 @@ export function Manuscript({
               ) : (
                 <p className={segment.status === "error" ? "status-line is-error" : segment.status === "translating" ? "status-line is-translating" : "status-line"}>
                   {segment.status === "error" ? (
-                    segment.error || "This segment did not translate."
+                    segment.error || t(locale, "segmentFailed")
                   ) : segment.status === "translating" ? (
                     <>
-                      <span className="translating-word">Translating</span>
+                      <span className="translating-word">{t(locale, "translating")}</span>
                       <span className="translating-dots" aria-hidden="true">
                         <span>.</span>
                         <span>.</span>
@@ -231,10 +234,10 @@ export function Manuscript({
                       </span>
                     </>
                   ) : (
-                    "Waiting"
+                    t(locale, "waiting")
                   )}
                   {segment.status === "error" && (
-                    <button type="button" className="inline-retry" onClick={() => onRetry(index)}>Retry</button>
+                    <button type="button" className="inline-retry" onClick={() => onRetry(index)}>{t(locale, "retry")}</button>
                   )}
                 </p>
               )}

@@ -72,15 +72,20 @@ function parseTranslation(raw: string): { translation: string; note: string } {
   return { translation, note };
 }
 
-function systemPrompt(fromName: string, toName: string): string {
-  return [
+function systemPrompt(fromName: string, toName: string, instructions: string): string {
+  const lines = [
     "You are a precise translator working through a document one segment at a time.",
     `Translate from ${fromName} into ${toName}.`,
     "The previous segment is context only. Use it to keep tone, terminology, pronouns, and unfinished thoughts consistent. Translate the current segment alone. Do not repeat or summarize the previous segment.",
     `Preserve line breaks, lists, names, numbers, dates, and citations. Do not add headings, quotation marks, or commentary inside the translation. If a passage is already in ${toName}, leave it unchanged.`,
     `Include a note when the segment has an idiom or metaphor, when a pronoun or gender is not specified, when a proper name or cultural reference would be opaque, or when you chose between two plausible meanings. Name the source wording and the choice you made. Write that note in ${toName}, in one or two sentences. If none of these apply, return an empty note.`,
-    'Respond as JSON with the shape {"translation":"...","note":"..."}.',
-  ].join("\n\n");
+  ];
+  const extra = instructions.trim();
+  if (extra) {
+    lines.push(`The reader also asked for this. Follow it in the translation and the note:\n${extra}`);
+  }
+  lines.push('Respond as JSON with the shape {"translation":"...","note":"..."}.');
+  return lines.join("\n\n");
 }
 
 function userPrompt(input: {
@@ -107,6 +112,7 @@ export async function translateSegment(input: {
   from: LanguageId;
   to: LanguageId;
   current: string;
+  instructions?: string;
   previousOriginal?: string;
   previousTranslation?: string;
   signal?: AbortSignal;
@@ -126,7 +132,7 @@ export async function translateSegment(input: {
         response_format: { type: "json_object" },
         ...tokenLimit,
         messages: [
-          { role: "system", content: systemPrompt(fromName, toName) },
+          { role: "system", content: systemPrompt(fromName, toName, input.instructions ?? "") },
           {
             role: "user",
             content: userPrompt({

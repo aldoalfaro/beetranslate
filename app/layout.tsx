@@ -1,10 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
+import { t, uiLocaleFromHeader } from "@/lib/i18n";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Bee Translate",
-  description: "Translate PDF, Word, or pasted text between Spanish, French, English, and Korean.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = uiLocaleFromHeader((await headers()).get("accept-language"));
+  return {
+    title: "Bee Translate",
+    description: t(locale, "metaDescription"),
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#f3efe6",
@@ -12,9 +17,10 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = uiLocaleFromHeader((await headers()).get("accept-language"));
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
