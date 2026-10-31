@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "beetranslate",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "beetranslate"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "beetranslate",
+      "database_name": "beetranslate",
+      "database_id": "7d441d66-4763-4865-93c1-dc8196d19d45",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FittedTextarea } from "@/components/fitted-textarea";
 import { noteOnSegment, t, translationField, type UiLocale } from "@/lib/i18n";
 import { languageName, type LanguageId } from "@/lib/languages";
-import type { Segment } from "@/lib/types";
+import type { Segment, SessionUser } from "@/lib/types";
 
 type Props = {
   locale: UiLocale;
@@ -18,6 +19,9 @@ type Props = {
   retrying: boolean;
   armNew: boolean;
   openNote: string | null;
+  user: SessionUser | null | undefined;
+  saveState: "saving" | "saved" | "error" | null;
+  onSignIn: () => void;
   onEdit: (index: number, value: string) => void;
   onRetry: (index: number) => void;
   onRetryFailed: () => void;
@@ -47,6 +51,9 @@ export function Manuscript({
   retrying,
   armNew,
   openNote,
+  user,
+  saveState,
+  onSignIn,
   onEdit,
   onRetry,
   onRetryFailed,
@@ -123,6 +130,14 @@ export function Manuscript({
               {translating && (
                 <span className="count" aria-live="polite">{done} / {segments.length}</span>
               )}
+              {user && saveState && (
+                <span className={saveState === "error" ? "count save-state is-error" : "count save-state"} aria-live="polite">
+                  {saveState === "saving" ? t(locale, "saving") : saveState === "error" ? t(locale, "saveFailed") : t(locale, "saved")}
+                </span>
+              )}
+              {!user && (
+                <button type="button" className="text-btn" onClick={onSignIn}>{t(locale, "signInToSave")}</button>
+              )}
               {failed > 0 && !translating && (
                 <button type="button" className="text-btn" onClick={onRetryFailed} disabled={retrying}>
                   {retrying ? t(locale, "retrying") : t(locale, "retry")}
@@ -161,6 +176,7 @@ export function Manuscript({
               <button type="button" className={armNew ? "text-btn is-danger" : "text-btn"} onClick={onNew}>
                 {armNew ? t(locale, "discard") : t(locale, "new")}
               </button>
+              <AccountMenu locale={locale} user={user} onSignIn={onSignIn} />
             </div>
           </header>
           {translating && (

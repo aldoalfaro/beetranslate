@@ -7,7 +7,7 @@ import { downloadName } from "@/lib/download-name";
 import { isFatalTranslationError, t, type UiLocale } from "@/lib/i18n";
 import { languageName, type LanguageId } from "@/lib/languages";
 import { MAX_INPUT_CHARS, MAX_SEGMENTS, segmentText } from "@/lib/segment";
-import { MAX_INSTRUCTIONS, type Segment } from "@/lib/types";
+import { MAX_INSTRUCTIONS, type Segment, type SessionUser } from "@/lib/types";
 
 type Phase = "compose" | "translating" | "done";
 
@@ -63,7 +63,25 @@ async function requestSegment(input: {
   };
 }
 
-export function App({ locale }: { locale: UiLocale }) {
+function documentBody(instructions: string, segments: Segment[]) {
+  return {
+    instructions,
+    segments: segments.map((segment) => ({
+      id: segment.id,
+      original: segment.original,
+      translation: segment.translation,
+      note: segment.note,
+      status: segment.status,
+      error: segment.error ?? "",
+    })),
+  };
+}
+
+type Draft =
+  | { kind: "compose"; from: LanguageId; to: LanguageId; instructions: string; text: string; fileName: string | null }
+  | { kind: "manuscript"; from: LanguageId; to: LanguageId; instructions: string; fileName: string | null; segments: Segment[] };
+
+export function App({ locale, initialId, authError }: { locale: UiLocale; initialId: string | null; authError: boolean }) {
   const [phase, setPhase] = useState<Phase>("compose");
   const [from, setFrom] = useState<LanguageId>("ko");
   const [to, setTo] = useState<LanguageId>("es");
@@ -77,7 +95,16 @@ export function App({ locale }: { locale: UiLocale }) {
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [armNew, setArmNew] = useState(false);
+  const [user, setUser] = useState<SessionUser | null | undefined>(undefined);
+  const [translationId, setTranslationId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"saving" | "saved" | "error" | null>(null);
   const segmentsRef = useRef<Segment[]>([]);
+  const translationIdRef = useRef<string | null>(null);
+  const instructionsRef = useRef("");
+  const userRef = useRef<SessionUser | null | undefined>(undefined);
+  const lastSaved = useRef("");
+  instructionsRef.current = instructions;
+  userRef.current = user;
   const abortRef = useRef<AbortController | null>(null);
   const runningRef = useRef(false);
   const inflightRef = useRef(new Set<number>());
@@ -93,6 +120,137 @@ export function App({ locale }: { locale: UiLocale }) {
   }
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  async function persist() {
+    const id = translationIdRef.current;
+    if (!id || !userRef.current) return;
+    const body = documentBody(instructionsRef.current, segmentsRef.current);
+    const snapshot = JSON.stringify(body);
+    if (snapshot === lastSaved.current) return;
+    setSaveState("saving");
+    const response = await fetch(`/api/translations/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: snapshot,
+      keepalive: true,
+    });
+    if (!response.ok) {
+      setSaveState("error");
+      return;
+    }
+    lastSaved.current = snapshot;
+    setSaveState("saved");
+  }
+
+  async function createDocument(nextSegments: Segment[], source?: { from: LanguageId; to: LanguageId; fileName: string | null }) {
+    if (!userRef.current) return;
+    const sourceFrom = source?.from ?? from;
+    const sourceTo = source?.to ?? to;
+    const sourceName = source ? source.fileName : fileName;
+    const firstLine = nextSegments[0]?.original.split("\n").find((line) => line.trim())?.trim() ?? "";
+    const title = (sourceName ? sourceName.replace(/\.[^.]+$/, "") : firstLine || t(locale, "translationTitle")).slice(0, 120);
+    const body = documentBody(instructionsRef.current, nextSegments);
+    const response = await fetch("/api/translations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, from: sourceFrom, to: sourceTo, ...body }),
+    });
+    if (!response.ok) {
+      setSaveState("error");
+      return;
+    }
+    const payload = (await response.json()) as { id?: string };
+    if (!payload.id) return;
+    translationIdRef.current = payload.id;
+    setTranslationId(payload.id);
+    lastSaved.current = JSON.stringify(body);
+    setSaveState("saved");
+    window.history.replaceState(null, "", `/?id=${payload.id}`);
+  }
+
+  function signIn() {
+    const draft: Draft = phase === "compose"
+      ? { kind: "compose", from, to, instructions, text, fileName }
+      : { kind: "manuscript", from, to, instructions, fileName, segments: segmentsRef.current };
+    sessionStorage.setItem("bt-draft", JSON.stringify(draft));
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `/api/auth/google?next=${encodeURIComponent(next)}`;
+  }
+
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      const session = (await fetch("/api/auth/session").then((response) => response.json()).catch(() => ({ user: null }))) as { user?: SessionUser | null };
+      if (cancel) return;
+      const nextUser = session.user ?? null;
+      userRef.current = nextUser;
+      setUser(nextUser);
+      if (authError) setError(t(locale, "signInFailed"));
+      if (initialId && nextUser) {
+        const response = await fetch(`/api/translations/${initialId}`);
+        if (cancel) return;
+        if (!response.ok) {
+          setError(t(locale, "translationMissing"));
+          return;
+        }
+        const document = (await response.json()) as { from: LanguageId; to: LanguageId; instructions: string; segments: Segment[] };
+        if (cancel) return;
+        const restored = document.segments.map((segment) => (
+          segment.status === "done" || segment.status === "error"
+            ? segment
+            : { ...segment, status: "error" as const, error: segment.error || t(locale, "segmentFailed") }
+        ));
+        setFrom(document.from);
+        setTo(document.to);
+        setInstructions(document.instructions);
+        instructionsRef.current = document.instructions;
+        setFileName(null);
+        translationIdRef.current = initialId;
+        setTranslationId(initialId);
+        lastSaved.current = JSON.stringify(documentBody(document.instructions, restored));
+        commit(restored);
+        setPhase("done");
+        return;
+      }
+      const raw = sessionStorage.getItem("bt-draft");
+      if (!raw || !nextUser) return;
+      sessionStorage.removeItem("bt-draft");
+      let draft: Draft;
+      try {
+        draft = JSON.parse(raw) as Draft;
+      } catch {
+        return;
+      }
+      if (cancel) return;
+      setFrom(draft.from);
+      setTo(draft.to);
+      setInstructions(draft.instructions);
+      instructionsRef.current = draft.instructions;
+      setFileName(draft.fileName);
+      if (draft.kind === "compose") {
+        setText(draft.text);
+        return;
+      }
+      commit(draft.segments);
+      setPhase(draft.segments.some((segment) => segment.translation || segment.status === "done") ? "done" : "translating");
+      await createDocument(draft.segments, { from: draft.from, to: draft.to, fileName: draft.fileName });
+    })();
+    return () => { cancel = true; };
+  }, [initialId, authError, locale]);
+
+  useEffect(() => {
+    if (!translationId || !user) return;
+    const snapshot = JSON.stringify(documentBody(instructions, segments));
+    if (snapshot === lastSaved.current) return;
+    const timer = window.setTimeout(() => { void persist(); }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [segments, instructions, translationId, user]);
+
+  useEffect(() => {
+    const onHide = () => { void persist(); };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, []);
 
   useEffect(() => {
     if (phase === "translating") {
@@ -186,6 +344,12 @@ export function App({ locale }: { locale: UiLocale }) {
       status: "waiting",
     })));
     setPhase("translating");
+    if (userRef.current === undefined) {
+      const session = (await fetch("/api/auth/session").then((response) => response.json()).catch(() => ({ user: null }))) as { user?: SessionUser | null };
+      userRef.current = session.user ?? null;
+      setUser(userRef.current);
+    }
+    if (userRef.current) await createDocument(segmentsRef.current);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -215,9 +379,16 @@ export function App({ locale }: { locale: UiLocale }) {
           const message = caught instanceof Error ? caught.message : t(locale, "segmentFailed");
           const fatal = isFatal(caught);
           if (fatal && succeeded === 0) {
+            const id = translationIdRef.current;
+            if (id) {
+              translationIdRef.current = null;
+              setTranslationId(null);
+              void fetch(`/api/translations/${id}`, { method: "DELETE" });
+            }
             commit([]);
             setPhase("compose");
             setError(message);
+            window.history.replaceState(null, "", "/");
             return;
           }
           patch(index, { status: "error", error: message });
@@ -232,7 +403,10 @@ export function App({ locale }: { locale: UiLocale }) {
         }
       }
 
-      if (!controller.signal.aborted) setPhase("done");
+      if (!controller.signal.aborted) {
+        setPhase("done");
+        await persist();
+      }
     } finally {
       runningRef.current = false;
     }
@@ -330,6 +504,11 @@ export function App({ locale }: { locale: UiLocale }) {
     setExporting(null);
     setRetrying(false);
     setPhase("compose");
+    translationIdRef.current = null;
+    setTranslationId(null);
+    setSaveState(null);
+    lastSaved.current = "";
+    window.history.replaceState(null, "", "/");
   }
 
   function requestNew() {
@@ -353,6 +532,8 @@ export function App({ locale }: { locale: UiLocale }) {
           reading={reading}
           error={error}
           segmentCount={preview.length}
+          user={user}
+          onSignIn={signIn}
           onFrom={setFrom}
           onTo={setTo}
           instructions={instructions}
@@ -377,6 +558,9 @@ export function App({ locale }: { locale: UiLocale }) {
           retrying={retrying}
           armNew={armNew}
           openNote={openNote}
+          user={user}
+          saveState={saveState}
+          onSignIn={signIn}
           onEdit={(index, value) => patch(index, { translation: value })}
           onRetry={(index) => void retry(index)}
           onRetryFailed={() => void retryFailed()}

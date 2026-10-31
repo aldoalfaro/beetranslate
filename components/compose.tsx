@@ -18,12 +18,13 @@ function FileIcon() {
     </svg>
   );
 }
+import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FittedTextarea } from "@/components/fitted-textarea";
 import { segmentCount as segmentCountLabel, t, type UiLocale } from "@/lib/i18n";
 import { LANGUAGES, languageName, type LanguageId } from "@/lib/languages";
 import { MAX_INPUT_CHARS, MAX_SEGMENTS } from "@/lib/segment";
-import { MAX_INSTRUCTIONS } from "@/lib/types";
+import { MAX_INSTRUCTIONS, type SessionUser } from "@/lib/types";
 
 type Props = {
   locale: UiLocale;
@@ -35,6 +36,8 @@ type Props = {
   reading: boolean;
   error: string | null;
   segmentCount: number;
+  user: SessionUser | null | undefined;
+  onSignIn: () => void;
   onFrom: (value: LanguageId) => void;
   onTo: (value: LanguageId) => void;
   onText: (value: string) => void;
@@ -54,6 +57,8 @@ export function Compose({
   reading,
   error,
   segmentCount,
+  user,
+  onSignIn,
   onFrom,
   onTo,
   onText,
@@ -111,6 +116,7 @@ export function Compose({
       >
         <header className="bar">
           <Brand />
+          <AccountMenu locale={locale} user={user} onSignIn={onSignIn} />
         </header>
         <input
           ref={fileRef}

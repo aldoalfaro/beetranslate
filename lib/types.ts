@@ -25,6 +25,13 @@ export type ExportSegment = {
   note: string;
 };
 
+export type SessionUser = {
+  id: string;
+  email: string;
+  name: string;
+  picture: string;
+};
+
 export type ExportRequest = {
   title: string;
   from: LanguageId;

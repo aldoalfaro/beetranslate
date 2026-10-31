@@ -116,7 +116,7 @@ button { -webkit-tap-highlight-color: transparent; }
   margin-left: auto;
   display: flex;
   gap: 1.15rem;
-  align-items: baseline;
+  align-items: center;
 }
 
 .text-btn {
@@ -604,6 +604,132 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 .download-menu button:hover { color: var(--accent); }
+
+.account { position: relative; margin-left: 0.35rem; }
+.compose .account { margin-left: auto; }
+
+.account-btn {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--rule);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.account-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.account-btn span {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  z-index: 8;
+  min-width: 12.5rem;
+  padding: 0.7rem 0 0.35rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+}
+
+.account-name,
+.account-email {
+  margin: 0;
+  padding: 0 0.9rem;
+}
+
+.account-name {
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.account-email {
+  margin-top: 0.15rem;
+  margin-bottom: 0.45rem;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.account-menu a,
+.account-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.account-menu a:hover,
+.account-menu button:hover { color: var(--accent); }
+
+.library-empty {
+  margin: 2.5rem 0 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.library-list { margin-top: 1.5rem; }
+
+.library-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1.5rem;
+  padding: 1.15rem 0;
+  border-top: 1px solid var(--rule);
+  text-decoration: none;
+  color: inherit;
+}
+
+.library-row:last-child { border-bottom: 1px solid var(--rule); }
+.library-row:hover .library-title { color: var(--accent); }
+
+.library-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+
+.library-meta,
+.library-date {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.library-meta { display: block; margin-top: 0.35rem; letter-spacing: 0.04em; text-transform: none; }
+
+.save-state { color: var(--faint); }
+.save-state.is-error { color: var(--accent); letter-spacing: 0.04em; text-transform: none; font-family: var(--serif); font-style: italic; font-size: 1rem; font-weight: 400; }
 
 .count {
   margin: 0;
