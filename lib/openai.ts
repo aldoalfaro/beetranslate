@@ -108,6 +108,72 @@ function isAbort(error: unknown): boolean {
   return error instanceof Error && (error.name === "AbortError" || error.name === "APIUserAbortError");
 }
 
+function clampTitle(raw: string): string {
+  const cleaned = raw
+    .replace(/[\r\n]+/g, " ")
+    .replace(/^[\s"'“”«»]+|[\s"'“”«».!?:;]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  const words = cleaned.split(" ");
+  const limited = words.slice(0, 5).join(" ");
+  const capped = words.length === 1 && limited.length > 40 ? limited.slice(0, 40).trim() : limited;
+  return capped.slice(0, 120);
+}
+
+export async function suggestTitle(input: { to: LanguageId; text: string; signal?: AbortSignal }): Promise<string> {
+  const toName = languageName(input.to);
+  const passage = input.text.trim().slice(0, 2_000);
+  if (!passage) throw new Error("The model returned an empty translation.");
+  const tokenLimit =
+    MODEL.startsWith("gpt-5") || MODEL.startsWith("gpt-6") || MODEL.startsWith("o")
+      ? { max_completion_tokens: 80 }
+      : { max_tokens: 80 };
+
+  try {
+    const completion = await getClient().chat.completions.create(
+      {
+        model: MODEL,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        ...tokenLimit,
+        messages: [
+          {
+            role: "system",
+            content: [
+              `Write a title in ${toName} for a translation of the passage.`,
+              "Use at most five words.",
+              "Do not translate word for word if a shorter name is clearer.",
+              "No quotation marks, no final period, and no explanation.",
+              'Respond as JSON with the shape {"title":"..."}.',
+            ].join(" "),
+          },
+          { role: "user", content: passage },
+        ],
+      },
+      { signal: input.signal },
+    );
+    const raw = completion.choices[0]?.message?.content ?? "";
+    let data: unknown;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("The model returned an unreadable response.");
+      data = JSON.parse(match[0]);
+    }
+    const title = data && typeof data === "object" && typeof (data as { title?: unknown }).title === "string"
+      ? clampTitle((data as { title: string }).title)
+      : "";
+    if (!title) throw new Error("The model returned an empty translation.");
+    return title;
+  } catch (error) {
+    if (isAbort(error)) throw error;
+    if (error instanceof Error && /empty translation|unreadable response/.test(error.message)) throw error;
+    throw new Error(publicModelError(error));
+  }
+}
+
 export async function translateSegment(input: {
   from: LanguageId;
   to: LanguageId;

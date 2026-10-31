@@ -5,7 +5,7 @@ import { Compose } from "@/components/compose";
 import { Manuscript } from "@/components/manuscript";
 import { downloadName } from "@/lib/download-name";
 import { isFatalTranslationError, t, type UiLocale } from "@/lib/i18n";
-import { languageName, type LanguageId } from "@/lib/languages";
+import type { LanguageId } from "@/lib/languages";
 import { MAX_INPUT_CHARS, MAX_SEGMENTS, segmentText } from "@/lib/segment";
 import { MAX_INSTRUCTIONS, type Segment, type SessionUser } from "@/lib/types";
 
@@ -63,8 +63,16 @@ async function requestSegment(input: {
   };
 }
 
-function documentBody(instructions: string, segments: Segment[]) {
+function fallbackTitle(text: string): string {
+  const line = text.split("\n").map((part) => part.trim()).find(Boolean) ?? "";
+  const words = line.split(/\s+/).filter(Boolean);
+  const short = words.length > 1 ? words.slice(0, 5).join(" ") : line.slice(0, 40);
+  return short.trim().slice(0, 120);
+}
+
+function documentBody(title: string, instructions: string, segments: Segment[]) {
   return {
+    title,
     instructions,
     segments: segments.map((segment) => ({
       id: segment.id,
@@ -79,7 +87,7 @@ function documentBody(instructions: string, segments: Segment[]) {
 
 type Draft =
   | { kind: "compose"; from: LanguageId; to: LanguageId; instructions: string; text: string; fileName: string | null }
-  | { kind: "manuscript"; from: LanguageId; to: LanguageId; instructions: string; fileName: string | null; segments: Segment[] };
+  | { kind: "manuscript"; from: LanguageId; to: LanguageId; instructions: string; fileName: string | null; title: string; segments: Segment[] };
 
 export function App({ locale, initialId, authError }: { locale: UiLocale; initialId: string | null; authError: boolean }) {
   const [phase, setPhase] = useState<Phase>("compose");
@@ -94,13 +102,15 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
   const [openNote, setOpenNote] = useState<string | null>(null);
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const [armNew, setArmNew] = useState(false);
   const [user, setUser] = useState<SessionUser | null | undefined>(undefined);
   const [translationId, setTranslationId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "error" | null>(null);
+  const [title, setTitle] = useState("");
   const segmentsRef = useRef<Segment[]>([]);
   const translationIdRef = useRef<string | null>(null);
   const instructionsRef = useRef("");
+  const titleRef = useRef("");
+  const titleTouched = useRef(false);
   const userRef = useRef<SessionUser | null | undefined>(undefined);
   const lastSaved = useRef("");
   instructionsRef.current = instructions;
@@ -124,7 +134,7 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
   async function persist() {
     const id = translationIdRef.current;
     if (!id || !userRef.current) return;
-    const body = documentBody(instructionsRef.current, segmentsRef.current);
+    const body = documentBody(titleRef.current, instructionsRef.current, segmentsRef.current);
     const snapshot = JSON.stringify(body);
     if (snapshot === lastSaved.current) return;
     setSaveState("saving");
@@ -146,14 +156,12 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
     if (!userRef.current) return;
     const sourceFrom = source?.from ?? from;
     const sourceTo = source?.to ?? to;
-    const sourceName = source ? source.fileName : fileName;
-    const firstLine = nextSegments[0]?.original.split("\n").find((line) => line.trim())?.trim() ?? "";
-    const title = (sourceName ? sourceName.replace(/\.[^.]+$/, "") : firstLine || t(locale, "translationTitle")).slice(0, 120);
-    const body = documentBody(instructionsRef.current, nextSegments);
+    const chosen = titleRef.current.trim() || fallbackTitle(nextSegments[0]?.original ?? "") || t(locale, "translationTitle");
+    const body = documentBody(chosen, instructionsRef.current, nextSegments);
     const response = await fetch("/api/translations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, from: sourceFrom, to: sourceTo, ...body }),
+      body: JSON.stringify({ from: sourceFrom, to: sourceTo, ...body }),
     });
     if (!response.ok) {
       setSaveState("error");
@@ -171,7 +179,7 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
   function signIn() {
     const draft: Draft = phase === "compose"
       ? { kind: "compose", from, to, instructions, text, fileName }
-      : { kind: "manuscript", from, to, instructions, fileName, segments: segmentsRef.current };
+      : { kind: "manuscript", from, to, instructions, fileName, title: titleRef.current, segments: segmentsRef.current };
     sessionStorage.setItem("bt-draft", JSON.stringify(draft));
     const next = `${window.location.pathname}${window.location.search}`;
     window.location.href = `/api/auth/google?next=${encodeURIComponent(next)}`;
@@ -193,7 +201,7 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
           setError(t(locale, "translationMissing"));
           return;
         }
-        const document = (await response.json()) as { from: LanguageId; to: LanguageId; instructions: string; segments: Segment[] };
+        const document = (await response.json()) as { title?: string; from: LanguageId; to: LanguageId; instructions: string; segments: Segment[] };
         if (cancel) return;
         const restored = document.segments.map((segment) => (
           segment.status === "done" || segment.status === "error"
@@ -204,10 +212,13 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
         setTo(document.to);
         setInstructions(document.instructions);
         instructionsRef.current = document.instructions;
+        titleTouched.current = true;
+        titleRef.current = document.title ?? "";
+        setTitle(titleRef.current);
         setFileName(null);
         translationIdRef.current = initialId;
         setTranslationId(initialId);
-        lastSaved.current = JSON.stringify(documentBody(document.instructions, restored));
+        lastSaved.current = JSON.stringify(documentBody(titleRef.current, document.instructions, restored));
         commit(restored);
         setPhase("done");
         return;
@@ -227,24 +238,32 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
       setInstructions(draft.instructions);
       instructionsRef.current = draft.instructions;
       setFileName(draft.fileName);
+      if (draft.kind === "manuscript" && draft.title) {
+        titleTouched.current = true;
+        titleRef.current = draft.title;
+        setTitle(draft.title);
+      }
       if (draft.kind === "compose") {
         setText(draft.text);
         return;
       }
       commit(draft.segments);
       setPhase(draft.segments.some((segment) => segment.translation || segment.status === "done") ? "done" : "translating");
+      const naming = draft.title ? Promise.resolve() : nameTitle(draft.to, draft.segments[0]?.original ?? "");
       await createDocument(draft.segments, { from: draft.from, to: draft.to, fileName: draft.fileName });
+      await naming;
+      await persist();
     })();
     return () => { cancel = true; };
   }, [initialId, authError, locale]);
 
   useEffect(() => {
     if (!translationId || !user) return;
-    const snapshot = JSON.stringify(documentBody(instructions, segments));
+    const snapshot = JSON.stringify(documentBody(title, instructions, segments));
     if (snapshot === lastSaved.current) return;
     const timer = window.setTimeout(() => { void persist(); }, 3000);
     return () => window.clearTimeout(timer);
-  }, [segments, instructions, translationId, user]);
+  }, [segments, instructions, title, translationId, user]);
 
   useEffect(() => {
     const onHide = () => { void persist(); };
@@ -258,14 +277,8 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
       document.title = `${done} ${t(locale, "of")} ${segments.length} · Bee Translate`;
       return;
     }
-    document.title = phase === "done" ? `${languageName(from, locale)} → ${languageName(to, locale)} · Bee Translate` : "Bee Translate";
-  }, [phase, segments, from, to, locale]);
-
-  useEffect(() => {
-    if (!armNew) return;
-    const timer = window.setTimeout(() => setArmNew(false), 4000);
-    return () => window.clearTimeout(timer);
-  }, [armNew]);
+    document.title = phase === "done" && title.trim() ? `${title.trim()} · Bee Translate` : "Bee Translate";
+  }, [phase, segments, title, locale]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -317,6 +330,26 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
     }
   }
 
+  async function nameTitle(target: LanguageId, source: string) {
+    try {
+      const response = await fetch("/api/title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: target, text: source }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { title?: string };
+      const next = typeof payload.title === "string" ? payload.title.trim() : "";
+      if (!response.ok || !next || titleTouched.current) return;
+      titleRef.current = next;
+      setTitle(next);
+    } catch {
+      if (titleTouched.current || titleRef.current.trim()) return;
+      const fallback = fallbackTitle(source) || t(locale, "translationTitle");
+      titleRef.current = fallback;
+      setTitle(fallback);
+    }
+  }
+
   async function translate() {
     const parts = segmentText(text);
     if (
@@ -335,7 +368,9 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
 
     setError(null);
     setOpenNote(null);
-    setArmNew(false);
+    titleTouched.current = false;
+    titleRef.current = "";
+    setTitle("");
     commit(parts.map((original, index) => ({
       id: `seg-${index}`,
       original,
@@ -349,7 +384,9 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
       userRef.current = session.user ?? null;
       setUser(userRef.current);
     }
+    const titlePromise = nameTitle(to, parts[0] ?? "");
     if (userRef.current) await createDocument(segmentsRef.current);
+    void titlePromise.then(() => persist());
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -457,13 +494,13 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
     if (!ready || exporting) return;
     setExporting(kind);
     setError(null);
-    const title = (fileName ? fileName.replace(/\.[^.]+$/, "") : t(locale, "translationTitle")).slice(0, 120);
+    const exportTitle = (titleRef.current.trim() || t(locale, "translationTitle")).slice(0, 120);
     try {
       const response = await fetch(kind === "pdf" ? "/api/export/pdf" : "/api/export/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
+          title: exportTitle,
           from,
           to,
           segments: segmentsRef.current.map((segment) => ({
@@ -480,7 +517,7 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = downloadName(title, kind === "pdf" ? "pdf" : "docx");
+      anchor.download = downloadName(exportTitle, kind === "pdf" ? "pdf" : "docx");
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -492,32 +529,10 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
     }
   }
 
-  function reset() {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    commit([]);
-    setText("");
-    setFileName(null);
-    setError(null);
-    setOpenNote(null);
-    setArmNew(false);
-    setExporting(null);
-    setRetrying(false);
-    setPhase("compose");
-    translationIdRef.current = null;
-    setTranslationId(null);
-    setSaveState(null);
-    lastSaved.current = "";
-    window.history.replaceState(null, "", "/");
-  }
-
-  function requestNew() {
-    const dirty = segmentsRef.current.some((segment) => segment.translation || segment.status === "done");
-    if (dirty && !armNew) {
-      setArmNew(true);
-      return;
-    }
-    reset();
+  function editTitle(value: string) {
+    titleTouched.current = true;
+    titleRef.current = value;
+    setTitle(value);
   }
 
   return (
@@ -556,17 +571,17 @@ export function App({ locale, initialId, authError }: { locale: UiLocale; initia
           error={error}
           exporting={exporting}
           retrying={retrying}
-          armNew={armNew}
           openNote={openNote}
           user={user}
           saveState={saveState}
+          title={title}
           onSignIn={signIn}
+          onTitle={editTitle}
           onEdit={(index, value) => patch(index, { translation: value })}
           onRetry={(index) => void retry(index)}
           onRetryFailed={() => void retryFailed()}
           onToggleNote={(id) => setOpenNote((current) => (current === id ? null : id))}
           onDownload={(kind) => void download(kind)}
-          onNew={requestNew}
         />
       )}
     </main>

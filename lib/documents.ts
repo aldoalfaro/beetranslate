@@ -101,15 +101,17 @@ export async function createTranslation(userId: string, input: {
 }
 
 export async function updateTranslation(userId: string, id: string, input: {
+  title: string;
   instructions: string;
   segments: StoredSegment[];
 }): Promise<boolean> {
   const db = await database();
-  const existing = await db.get<{ id: string }>("SELECT id FROM translations WHERE id = ? AND user_id = ?", [id, userId]);
+  const existing = await db.get<{ id: string; title: string }>("SELECT id, title FROM translations WHERE id = ? AND user_id = ?", [id, userId]);
   if (!existing) return false;
+  const title = input.title.trim().slice(0, 120) || existing.title;
   await db.run(
-    `UPDATE translations SET instructions = ?, segments = ?, segment_count = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
-    [input.instructions, JSON.stringify(input.segments), input.segments.length, new Date().toISOString(), id, userId],
+    `UPDATE translations SET title = ?, instructions = ?, segments = ?, segment_count = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+    [title, input.instructions, JSON.stringify(input.segments), input.segments.length, new Date().toISOString(), id, userId],
   );
   return true;
 }
@@ -166,11 +168,12 @@ export async function getTranslation(userId: string, id: string): Promise<Transl
   };
 }
 
-export function readDocumentInput(value: unknown): { instructions: string; segments: StoredSegment[] } | null {
+export function readDocumentInput(value: unknown): { title: string; instructions: string; segments: StoredSegment[] } | null {
   if (!value || typeof value !== "object") return null;
-  const body = value as { instructions?: unknown; segments?: unknown };
+  const body = value as { title?: unknown; instructions?: unknown; segments?: unknown };
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 120) : "";
   const instructions = typeof body.instructions === "string" ? body.instructions.trim().slice(0, MAX_INSTRUCTIONS) : "";
   const segments = parseSegments(body.segments);
   if (!segments) return null;
-  return { instructions, segments };
+  return { title, instructions, segments };
 }

@@ -17,17 +17,17 @@ type Props = {
   error: string | null;
   exporting: "pdf" | "docx" | null;
   retrying: boolean;
-  armNew: boolean;
   openNote: string | null;
   user: SessionUser | null | undefined;
   saveState: "saving" | "saved" | "error" | null;
+  title: string;
   onSignIn: () => void;
+  onTitle: (value: string) => void;
   onEdit: (index: number, value: string) => void;
   onRetry: (index: number) => void;
   onRetryFailed: () => void;
   onToggleNote: (id: string) => void;
   onDownload: (kind: "pdf" | "docx") => void;
-  onNew: () => void;
 };
 
 function InfoIcon() {
@@ -49,17 +49,17 @@ export function Manuscript({
   error,
   exporting,
   retrying,
-  armNew,
   openNote,
   user,
   saveState,
+  title,
   onSignIn,
+  onTitle,
   onEdit,
   onRetry,
   onRetryFailed,
   onToggleNote,
   onDownload,
-  onNew,
 }: Props) {
   const fromName = languageName(from, locale);
   const toName = languageName(to, locale);
@@ -125,7 +125,17 @@ export function Manuscript({
         <div className={translating ? "top" : "top rules"}>
           <header className="bar">
             <Brand />
-            <p className="bar-flow">{fromName} → {toName}</p>
+            <input
+              className="bar-title"
+              value={title}
+              maxLength={120}
+              aria-label={t(locale, "titleLabel")}
+              spellCheck={false}
+              onChange={(event) => onTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
             <div className="bar-actions">
               {translating && (
                 <span className="count" aria-live="polite">{done} / {segments.length}</span>
@@ -143,39 +153,32 @@ export function Manuscript({
                   {retrying ? t(locale, "retrying") : t(locale, "retry")}
                 </button>
               )}
-              <button
-                type="button"
-                className="text-btn"
-                disabled={!translationText}
-                onClick={() => void copyTranslation()}
-              >
-                {copied ? t(locale, "copied") : t(locale, "copy")}
-              </button>
               <div className="download" ref={downloadRef}>
                 <button
                   type="button"
                   className="text-btn"
                   aria-haspopup="menu"
                   aria-expanded={downloadOpen}
-                  disabled={downloadDisabled}
+                  disabled={!translationText && downloadDisabled}
                   onClick={() => setDownloadOpen((open) => !open)}
                 >
                   {exporting ? t(locale, "preparing") : t(locale, "download")}
                 </button>
-                {downloadOpen && !downloadDisabled && (
+                {downloadOpen && (translationText || !downloadDisabled) && (
                   <div className="download-menu" role="menu">
-                    <button type="button" role="menuitem" onClick={() => { setDownloadOpen(false); onDownload("pdf"); }}>
+                    <button type="button" role="menuitem" disabled={downloadDisabled} onClick={() => { setDownloadOpen(false); onDownload("pdf"); }}>
                       PDF
                     </button>
-                    <button type="button" role="menuitem" onClick={() => { setDownloadOpen(false); onDownload("docx"); }}>
+                    <button type="button" role="menuitem" disabled={downloadDisabled} onClick={() => { setDownloadOpen(false); onDownload("docx"); }}>
                       DOC
+                    </button>
+                    <button type="button" role="menuitem" disabled={!translationText} onClick={() => void copyTranslation()}>
+                      {copied ? t(locale, "copied") : t(locale, "copy")}
                     </button>
                   </div>
                 )}
               </div>
-              <button type="button" className={armNew ? "text-btn is-danger" : "text-btn"} onClick={onNew}>
-                {armNew ? t(locale, "discard") : t(locale, "new")}
-              </button>
+              <a className="text-btn" href="/library">{t(locale, "exit")}</a>
               <AccountMenu locale={locale} user={user} onSignIn={onSignIn} />
             </div>
           </header>
