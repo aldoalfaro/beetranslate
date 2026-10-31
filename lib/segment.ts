@@ -1,7 +1,10 @@
-export const SEGMENT_TARGET = 900;
-export const SEGMENT_HARD_MAX = 1800;
+export const SEGMENT_MIN = 400;
+export const SEGMENT_MAX = 1_600;
+export const SEGMENT_HARD_MAX = 1_800;
 export const MAX_SEGMENTS = 80;
 export const MAX_INPUT_CHARS = 100_000;
+
+const SENTENCE_END = /[.!?…]["'”’)\]]*(?=\s)|[。？！]["'”’)\]]*(?=\S)/g;
 
 export function segmentText(text: string): string[] {
   const normalized = text
@@ -13,80 +16,67 @@ export function segmentText(text: string): string[] {
 
   if (!normalized) return [];
 
+  const paragraphs = normalized.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+  const chunks = paragraphs.flatMap((paragraph) => splitToMax(paragraph));
+  return pack(chunks);
+}
+
+function pack(chunks: string[]): string[] {
   const segments: string[] = [];
+  let buffer = "";
 
-  const pushLongLine = (line: string) => {
-    if (line.length <= SEGMENT_HARD_MAX) {
-      segments.push(line);
-      return;
-    }
-
-    const sentences = line.split(/(?<=[.!?…。？！])\s+/).map((part) => part.trim()).filter(Boolean);
-    const pieces = sentences.length > 0 ? sentences : [line];
-    let buffer = "";
-
-    const flush = () => {
-      if (buffer.trim()) segments.push(buffer.trim());
-      buffer = "";
-    };
-
-    for (const sentence of pieces) {
-      if (sentence.length > SEGMENT_HARD_MAX) {
-        flush();
-        segments.push(...splitByWords(sentence, SEGMENT_TARGET));
-        continue;
-      }
-      const next = buffer ? `${buffer} ${sentence}` : sentence;
-      if (buffer && next.length > SEGMENT_TARGET) {
-        flush();
-        buffer = sentence;
-      } else {
-        buffer = next;
-      }
-    }
-
-    flush();
-  };
-
-  for (const block of normalized.split(/\n\s*\n/)) {
-    const trimmed = block.trim();
-    if (!trimmed) continue;
-
-    if (trimmed.length <= SEGMENT_TARGET) {
-      segments.push(trimmed);
+  for (const chunk of chunks) {
+    if (!buffer) {
+      buffer = chunk;
       continue;
     }
-
-    if (!trimmed.includes("\n")) {
-      pushLongLine(trimmed);
+    if (buffer.length >= SEGMENT_MIN) {
+      segments.push(buffer);
+      buffer = chunk;
       continue;
     }
-
-    const lines = trimmed.split(/\n/).map((line) => line.trim()).filter(Boolean);
-    let group: string[] = [];
-    let length = 0;
-
-    const flushGroup = () => {
-      if (group.length > 0) segments.push(group.join("\n"));
-      group = [];
-      length = 0;
-    };
-
-    for (const line of lines) {
-      if (line.length > SEGMENT_TARGET) {
-        flushGroup();
-        pushLongLine(line);
-        continue;
-      }
-      if (length > 0 && length + line.length + 1 > SEGMENT_TARGET) flushGroup();
-      group.push(line);
-      length += line.length + 1;
-    }
-
-    flushGroup();
+    const parts = splitToMax(`${buffer}\n\n${chunk}`);
+    segments.push(...parts.slice(0, -1));
+    buffer = parts[parts.length - 1] ?? "";
   }
 
+  if (buffer) segments.push(buffer);
   return segments;
+}
+
+function splitToMax(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  if (trimmed.length <= SEGMENT_MAX) return [trimmed];
+
+  const at = periodSplitPoint(trimmed);
+  if (at == null) {
+    return trimmed.length <= SEGMENT_HARD_MAX ? [trimmed] : splitByWords(trimmed, SEGMENT_MAX);
+  }
+
+  const left = trimmed.slice(0, at).trim();
+  const right = trimmed.slice(at).trim();
+  if (!left || !right || left.length >= trimmed.length) {
+    return trimmed.length <= SEGMENT_HARD_MAX ? [trimmed] : splitByWords(trimmed, SEGMENT_MAX);
+  }
+
+  return [...splitToMax(left), ...splitToMax(right)];
+}
+
+function periodSplitPoint(text: string): number | null {
+  const points: number[] = [];
+  for (const match of text.matchAll(SENTENCE_END)) {
+    const at = match.index + match[0].length;
+    const left = text.slice(0, at).trim();
+    const right = text.slice(at).trim();
+    if (left && right) points.push(at);
+  }
+  if (points.length === 0) return null;
+
+  const half = text.length / 2;
+  const fitting = points.filter((at) => text.slice(0, at).trim().length <= SEGMENT_MAX);
+  const pool = fitting.length > 0 ? fitting : points;
+  return pool.reduce((best, at) => (Math.abs(at - half) < Math.abs(best - half) ? at : best));
 }
 
 function splitByWords(text: string, target: number): string[] {
