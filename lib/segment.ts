@@ -1,5 +1,5 @@
 export const SEGMENT_MIN = 400;
-export const SEGMENT_MAX = 1_600;
+export const SEGMENT_MAX = 800;
 export const SEGMENT_HARD_MAX = 1_800;
 export const MAX_SEGMENTS = 80;
 export const MAX_INPUT_CHARS = 100_000;
