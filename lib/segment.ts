@@ -1,4 +1,4 @@
-export const SEGMENT_MIN = 100;
+export const SEGMENT_MIN = 30;
 export const SEGMENT_MAX = 300;
 export const SEGMENT_HARD_MAX = 1_800;
 export const MAX_SEGMENTS = 80;
