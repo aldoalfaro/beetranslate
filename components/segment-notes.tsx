@@ -1,9 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, type ChangeEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { FittedTextarea } from "@/components/fitted-textarea";
 import { noteOnQuote, t, type UiLocale } from "@/lib/i18n";
-import type { NoteAnchor } from "@/lib/note-anchors";
+import type { NoteAnchor, NoteRange } from "@/lib/note-anchors";
 
 function InfoIcon() {
   return (
@@ -154,7 +155,7 @@ function NoteSpot({
     <span ref={spotRef} className="note-spot" data-note-root="">
       <button
         type="button"
-        className={open ? "source-note is-open" : "source-note"}
+        className={open ? "source-note is-open phrase-hit" : "source-note"}
         aria-expanded={open}
         aria-label={noteOnQuote(locale, quote)}
         onClick={onToggle}
@@ -164,6 +165,57 @@ function NoteSpot({
       {open && <FloatingNote anchorRef={spotRef} mode="phrase" text={text} lang={lang} locale={locale} />}
     </span>
   );
+}
+
+export function TranslationField({
+  id,
+  className,
+  lang,
+  value,
+  ranges,
+  onChange,
+}: {
+  id: string;
+  className: string;
+  lang: string;
+  value: string;
+  ranges: NoteRange[];
+  onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+}) {
+  const mirrored = ranges.length > 0;
+  return (
+    <div className="translation-frame">
+      {mirrored && (
+        <div className={`${className} translation-mirror`} lang={lang} aria-hidden="true">
+          <HighlightedText text={value} ranges={ranges} />
+        </div>
+      )}
+      <FittedTextarea
+        id={id}
+        className={mirrored ? `${className} is-mirrored` : className}
+        lang={lang}
+        value={value}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function HighlightedText({ text, ranges }: { text: string; ranges: NoteRange[] }) {
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    if (range.start < cursor || range.end > text.length || range.end <= range.start) continue;
+    if (range.start > cursor) nodes.push(text.slice(cursor, range.start));
+    nodes.push(
+      <mark key={`${range.start}-${range.end}`} className="phrase-hit">
+        {text.slice(range.start, range.end)}
+      </mark>,
+    );
+    cursor = range.end;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
 }
 
 export function LooseNote({

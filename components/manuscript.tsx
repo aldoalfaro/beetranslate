@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
-import { FittedTextarea } from "@/components/fitted-textarea";
-import { AnchoredProse, LooseNote } from "@/components/segment-notes";
+import { AnchoredProse, LooseNote, TranslationField } from "@/components/segment-notes";
 import { noteOnSegment, t, translationField, type UiLocale } from "@/lib/i18n";
 import { languageName, type LanguageId } from "@/lib/languages";
 import { noteAnchors } from "@/lib/note-anchors";
@@ -188,8 +187,9 @@ export function Manuscript({
         </div>
 
         {segments.map((segment, index) => {
-          const anchors = segment.status === "done" ? noteAnchors(segment.id, segment.original, segment.note) : [];
+          const anchors = segment.status === "done" ? noteAnchors(segment.id, segment.original, segment.note, segment.translation) : [];
           const located = anchors.filter((anchor) => anchor.start >= 0);
+          const openAnchor = anchors.find((anchor) => anchor.id === openNote);
           const noted = openNote === segment.id || (openNote?.startsWith(`${segment.id}:`) ?? false);
           return (
           <article
@@ -220,11 +220,12 @@ export function Manuscript({
               {segment.status === "done" ? (
                 <div className="target-body">
                   <label className="sr-only" htmlFor={segment.id}>{translationField(locale, index + 1)}</label>
-                  <FittedTextarea
+                  <TranslationField
                     id={segment.id}
                     className={located.length > 0 ? "translation is-clear" : "translation"}
                     lang={to}
                     value={segment.translation}
+                    ranges={openAnchor?.translation ?? []}
                     onChange={(event) => onEdit(index, event.target.value)}
                   />
                   {segment.note && located.length === 0 && (

@@ -258,6 +258,7 @@ a.text-btn { text-decoration: none; }
 
 .prose,
 .translation,
+.translation-mirror,
 .status-line {
   font-family: var(--serif);
   font-size: 1.125rem;
@@ -272,7 +273,8 @@ a.text-btn { text-decoration: none; }
 }
 
 .prose[lang="ko"],
-.translation[lang="ko"] {
+.translation[lang="ko"],
+.translation-mirror[lang="ko"] {
   font-family: "Noto Serif KR", "Newsreader", serif;
   line-height: 1.75;
 }
@@ -295,6 +297,29 @@ a.text-btn { text-decoration: none; }
 }
 
 .translation.is-clear { padding-right: 0; }
+
+.translation-frame { position: relative; }
+
+.translation-mirror {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--ink);
+}
+
+.translation.is-mirrored {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--accent);
+}
+
+.phrase-hit {
+  background: rgba(141, 58, 46, 0.16);
+  color: inherit;
+  border-radius: 0.08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
 
 .translation:focus,
 .translation:focus-visible { outline: none; }
@@ -959,6 +984,7 @@ a.text-btn { text-decoration: none; }
 
   .prose,
   .translation,
+  .translation-mirror,
   .status-line { font-size: 1.05rem; }
 }
 

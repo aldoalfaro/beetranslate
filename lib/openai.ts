@@ -78,7 +78,7 @@ function systemPrompt(fromName: string, toName: string, instructions: string): s
     `Translate from ${fromName} into ${toName}.`,
     "The previous segment is context only. Use it to keep tone, terminology, pronouns, and unfinished thoughts consistent. Translate the current segment alone. Do not repeat or summarize the previous segment.",
     `Preserve line breaks, lists, names, numbers, dates, and citations. Do not add headings, quotation marks, or commentary inside the translation. If a passage is already in ${toName}, leave it unchanged.`,
-    `Include a note when the segment has an idiom or metaphor, when a pronoun or gender is not specified, when a proper name or cultural reference would be opaque, or when you chose between two plausible meanings. For each source wording you discuss, quote it exactly as it appears in the segment and say which choice you made. Write one sentence per wording, in ${toName}. If none of these apply, return an empty note.`,
+    `Include a note when the segment has an idiom or metaphor, when a pronoun or gender is not specified, when a proper name or cultural reference would be opaque, or when you chose between two plausible meanings. For each wording you discuss, quote the source exactly as it appears in the segment, then quote the translation you chose exactly as you wrote it. Write one sentence per wording, in ${toName}. If none of these apply, return an empty note.`,
   ];
   const extra = instructions.trim();
   if (extra) {
