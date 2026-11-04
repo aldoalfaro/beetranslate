@@ -169,6 +169,10 @@ export function noteOnSegment(locale: UiLocale, index: number): string {
   return locale === "es" ? `Nota del segmento ${index}` : `Note on segment ${index}`;
 }
 
+export function noteOnQuote(locale: UiLocale, quote: string): string {
+  return locale === "es" ? `Nota sobre “${quote}”` : `Note on “${quote}”`;
+}
+
 export function translationField(locale: UiLocale, index: number): string {
   return locale === "es" ? `Traducción ${index}` : `Translation ${index}`;
 }

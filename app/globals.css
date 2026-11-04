@@ -294,6 +294,8 @@ a.text-btn { text-decoration: none; }
   overflow-wrap: anywhere;
 }
 
+.translation.is-clear { padding-right: 0; }
+
 .translation:focus,
 .translation:focus-visible { outline: none; }
 
@@ -368,11 +370,51 @@ a.text-btn { text-decoration: none; }
 .info:hover,
 .info[aria-expanded="true"] { color: var(--accent); }
 
+.note-spot { white-space: inherit; }
+
+.source-note {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(141, 58, 46, 0.45);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.source-note.is-open {
+  text-decoration: none;
+  background: rgba(141, 58, 46, 0.16);
+  border-radius: 0.08em;
+}
+
+.source-note:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pair.is-noted { position: relative; z-index: 4; }
+
 .note {
   width: auto;
-  margin: 0.9rem 0 0;
-  padding: 0.05rem 0 0.05rem 0.85rem;
+  margin: 0;
+  padding: 0.7rem 0.9rem 0.75rem 0.85rem;
   border-left: 1px solid var(--accent);
+  background: var(--paper);
+  box-shadow: 0 12px 32px rgba(28, 25, 21, 0.12);
+}
+
+.note-float {
+  position: fixed;
+  z-index: 4;
 }
 
 .note-kicker {

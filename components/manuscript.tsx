@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FittedTextarea } from "@/components/fitted-textarea";
+import { AnchoredProse, LooseNote } from "@/components/segment-notes";
 import { noteOnSegment, t, translationField, type UiLocale } from "@/lib/i18n";
 import { languageName, type LanguageId } from "@/lib/languages";
+import { noteAnchors } from "@/lib/note-anchors";
 import type { Segment, SessionUser } from "@/lib/types";
 
 type Props = {
@@ -29,16 +31,6 @@ type Props = {
   onToggleNote: (id: string) => void;
   onDownload: (kind: "pdf" | "docx") => void;
 };
-
-function InfoIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.25" />
-      <path d="M12 10.75v5.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-      <circle cx="12" cy="8" r="0.8" fill="currentColor" />
-    </svg>
-  );
-}
 
 export function Manuscript({
   locale,
@@ -195,14 +187,30 @@ export function Manuscript({
           </div>
         </div>
 
-        {segments.map((segment, index) => (
+        {segments.map((segment, index) => {
+          const anchors = segment.status === "done" ? noteAnchors(segment.id, segment.original, segment.note) : [];
+          const located = anchors.filter((anchor) => anchor.start >= 0);
+          const noted = openNote === segment.id || (openNote?.startsWith(`${segment.id}:`) ?? false);
+          return (
           <article
             key={segment.id}
-            className={segment.status === "translating" ? "pair is-active" : "pair"}
+            className={segment.status === "translating" ? "pair is-active" : noted ? "pair is-noted" : "pair"}
           >
             <div className="cell source">
               <span className="cell-label">{fromName}</span>
-              <p className="prose" lang={from}>{segment.original}</p>
+              {located.length > 0 ? (
+                <AnchoredProse
+                  original={segment.original}
+                  lang={from}
+                  noteLang={to}
+                  locale={locale}
+                  anchors={located}
+                  openNote={openNote}
+                  onToggle={onToggleNote}
+                />
+              ) : (
+                <p className="prose" lang={from}>{segment.original}</p>
+              )}
             </div>
             <div className="gutter">
               <p className="num">{String(index + 1).padStart(2, "0")}</p>
@@ -214,29 +222,20 @@ export function Manuscript({
                   <label className="sr-only" htmlFor={segment.id}>{translationField(locale, index + 1)}</label>
                   <FittedTextarea
                     id={segment.id}
-                    className="translation"
+                    className={located.length > 0 ? "translation is-clear" : "translation"}
                     lang={to}
                     value={segment.translation}
                     onChange={(event) => onEdit(index, event.target.value)}
                   />
-                  {segment.note && (
-                    <div data-note-root="">
-                      <button
-                        type="button"
-                        className="info"
-                        aria-label={noteOnSegment(locale, index + 1)}
-                        aria-expanded={openNote === segment.id}
-                        onClick={() => onToggleNote(segment.id)}
-                      >
-                        <InfoIcon />
-                      </button>
-                      {openNote === segment.id && (
-                        <div className="note" role="dialog" aria-label={t(locale, "translationNote")} lang={to}>
-                          <p className="note-kicker">{t(locale, "note")}</p>
-                          <p className="note-body">{segment.note}</p>
-                        </div>
-                      )}
-                    </div>
+                  {segment.note && located.length === 0 && (
+                    <LooseNote
+                      text={segment.note}
+                      lang={to}
+                      locale={locale}
+                      open={openNote === `${segment.id}:0`}
+                      label={noteOnSegment(locale, index + 1)}
+                      onToggle={() => onToggleNote(`${segment.id}:0`)}
+                    />
                   )}
                 </div>
               ) : (
@@ -262,7 +261,8 @@ export function Manuscript({
               )}
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
