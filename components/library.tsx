@@ -28,6 +28,7 @@ export function Library({ locale }: { locale: UiLocale }) {
   const [user, setUser] = useState<SessionUser | null | undefined>(undefined);
   const [items, setItems] = useState<Item[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const docs = useRef(new Map<string, Stored>());
@@ -56,10 +57,16 @@ export function Library({ locale }: { locale: UiLocale }) {
     if (!openId) return;
     const onPointer = (event: PointerEvent) => {
       const target = event.target;
-      if (!(target instanceof Element) || !target.closest(`[data-library-menu="${openId}"]`)) setOpenId(null);
+      if (!(target instanceof Element) || !target.closest(`[data-library-menu="${openId}"]`)) {
+        setOpenId(null);
+        setConfirmId(null);
+      }
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenId(null);
+      if (event.key === "Escape") {
+        setOpenId(null);
+        setConfirmId(null);
+      }
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -101,6 +108,7 @@ export function Library({ locale }: { locale: UiLocale }) {
     if (!stored) return;
     setBusyId(item.id);
     setOpenId(null);
+    setConfirmId(null);
     try {
       const response = await fetch(kind === "pdf" ? "/api/export/pdf" : "/api/export/docx", {
         method: "POST",
@@ -122,6 +130,21 @@ export function Library({ locale }: { locale: UiLocale }) {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeItem(item: Item) {
+    if (busyId) return;
+    setBusyId(item.id);
+    try {
+      const response = await fetch(`/api/translations/${item.id}`, { method: "DELETE" });
+      if (!response.ok) return;
+      docs.current.delete(item.id);
+      setItems((current) => current?.filter((entry) => entry.id !== item.id) ?? current);
+      setOpenId(null);
+      setConfirmId(null);
     } finally {
       setBusyId(null);
     }
@@ -157,7 +180,10 @@ export function Library({ locale }: { locale: UiLocale }) {
                       aria-haspopup="menu"
                       aria-expanded={openId === item.id}
                       aria-label={t(locale, "actions")}
-                      onClick={() => setOpenId((current) => (current === item.id ? null : item.id))}
+                      onClick={() => {
+                        setConfirmId(null);
+                        setOpenId((current) => (current === item.id ? null : item.id));
+                      }}
                     >
                       ···
                     </button>
@@ -172,6 +198,23 @@ export function Library({ locale }: { locale: UiLocale }) {
                         <button type="button" role="menuitem" onClick={() => void copyItem(item)}>
                           {copiedId === item.id ? t(locale, "copied") : t(locale, "copyTranslation")}
                         </button>
+                        <a role="menuitem" href={`/?id=${item.id}`}>{t(locale, "edit")}</a>
+                        <hr className="menu-sep" />
+                        {confirmId === item.id ? (
+                          <div className="menu-confirm">
+                            <p>{t(locale, "removeConfirm")}</p>
+                            <div className="menu-confirm-actions">
+                              <button type="button" onClick={() => setConfirmId(null)}>{t(locale, "cancel")}</button>
+                              <button type="button" className="is-danger" disabled={busyId === item.id} onClick={() => void removeItem(item)}>
+                                {t(locale, "removeTranslation")}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button type="button" role="menuitem" className="is-danger" onClick={() => setConfirmId(item.id)}>
+                            {t(locale, "removeTranslation")}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
